@@ -21,7 +21,7 @@ def imp_url(
     desc=None,
 ):
     from dvc.dvcfile import Dvcfile
-    from dvc.stage import Stage, create_stage
+    from dvc.stage import Stage, create_stage, restore_meta
 
     out = resolve_output(url, out)
     path, wdir, out = resolve_paths(self, out)
@@ -43,8 +43,8 @@ def imp_url(
         outs=[out],
         erepo=erepo,
     )
-
-    if stage is None:
+    restore_meta(stage)
+    if stage.can_be_skipped:
         return None
 
     if desc:

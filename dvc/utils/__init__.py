@@ -9,6 +9,7 @@ import re
 import stat
 import sys
 import time
+from typing import Optional, Tuple
 
 import colorama
 import nanotime
@@ -236,20 +237,29 @@ def current_timestamp():
     return int(nanotime.timestamp(time.time()))
 
 
-def colorize(message, color=None):
+def colorize(message, color=None, style=None):
     """Returns a message in a specified color."""
     if not color:
         return message
+
+    styles = {
+        "dim": colorama.Style.DIM,
+        "bold": colorama.Style.BRIGHT,
+    }
 
     colors = {
         "green": colorama.Fore.GREEN,
         "yellow": colorama.Fore.YELLOW,
         "blue": colorama.Fore.BLUE,
         "red": colorama.Fore.RED,
+        "magenta": colorama.Fore.MAGENTA,
     }
 
-    return "{color}{message}{nc}".format(
-        color=colors.get(color, ""), message=message, nc=colorama.Fore.RESET
+    return "{style}{color}{message}{reset}".format(
+        style=styles.get(style, ""),
+        color=colors.get(color, ""),
+        message=message,
+        reset=colorama.Style.RESET_ALL,
     )
 
 
@@ -400,14 +410,27 @@ def error_link(name):
     return format_link(f"https://error.dvc.org/{name}")
 
 
-def parse_target(target, default=None):
+def parse_target(
+    target: str, default: str = None, isa_glob: bool = False
+) -> Tuple[Optional[str], Optional[str]]:
     from dvc.dvcfile import PIPELINE_FILE, PIPELINE_LOCK, is_valid_filename
     from dvc.exceptions import DvcException
+    from dvc.parsing import JOIN
 
     if not target:
         return None, None
 
-    match = TARGET_REGEX.match(target)
+    default = default or PIPELINE_FILE
+    if isa_glob:
+        path, _, glob = target.rpartition(":")
+        return path or default, glob or None
+
+    # look for first "@", so as not to assume too much about stage name
+    # eg: it might contain ":" in a generated stages from dict which might
+    # affect further parsing with the regex.
+    group, _, key = target.partition(JOIN)
+    match = TARGET_REGEX.match(group)
+
     if not match:
         return target, None
 
@@ -415,6 +438,10 @@ def parse_target(target, default=None):
         match.group("path"),
         match.group("name"),
     )
+
+    if name and key:
+        name += f"{JOIN}{key}"
+
     if path:
         if os.path.basename(path) == PIPELINE_LOCK:
             raise DvcException(
@@ -427,10 +454,9 @@ def parse_target(target, default=None):
             return ret if is_valid_filename(target) else ret[::-1]
 
     if not path:
-        path = default or PIPELINE_FILE
-        logger.debug("Assuming file to be '%s'", path)
+        logger.trace("Assuming file to be '%s'", default)
 
-    return path, name
+    return path or default, name
 
 
 def is_exec(mode):

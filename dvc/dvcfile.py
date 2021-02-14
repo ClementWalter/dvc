@@ -36,6 +36,10 @@ class LockfileCorruptedError(DvcException):
     pass
 
 
+class ParametrizedDumpError(DvcException):
+    pass
+
+
 def is_valid_filename(path):
     return path.endswith(DVC_FILE_SUFFIX) or os.path.basename(path) in [
         DVC_FILE,
@@ -197,7 +201,13 @@ class PipelineFile(FileMixin):
     def _dump_lockfile(self, stage):
         self._lockfile.dump(stage)
 
+    @staticmethod
+    def _check_if_parametrized(stage):
+        if stage.raw_data.parametrized:
+            raise ParametrizedDumpError(f"cannot dump a parametrized {stage}")
+
     def _dump_pipeline_file(self, stage):
+        self._check_if_parametrized(stage)
         stage_data = serialize.to_pipeline_file(stage)
 
         with modify_yaml(self.path, tree=self.repo.tree) as data:
@@ -213,8 +223,6 @@ class PipelineFile(FileMixin):
 
             if existing_entry:
                 orig_stage_data = data["stages"][stage.name]
-                if "meta" in orig_stage_data:
-                    stage_data[stage.name]["meta"] = orig_stage_data["meta"]
                 apply_diff(stage_data[stage.name], orig_stage_data)
             else:
                 data["stages"].update(stage_data)

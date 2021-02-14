@@ -3,7 +3,13 @@ import textwrap
 
 import pytest
 
-from dvc.dvcfile import PIPELINE_FILE, PIPELINE_LOCK, Dvcfile, SingleStageFile
+from dvc.dvcfile import (
+    PIPELINE_FILE,
+    PIPELINE_LOCK,
+    Dvcfile,
+    ParametrizedDumpError,
+    SingleStageFile,
+)
 from dvc.stage.exceptions import (
     StageFileDoesNotExistError,
     StageFileFormatError,
@@ -309,8 +315,8 @@ def test_dvcfile_dump_preserves_meta(tmp_dir, dvc, run_copy):
 
     data = dvcfile._load()[0]
     metadata = {"name": "copy-file"}
+    stage.meta = metadata
     data["stages"]["run_copy"]["meta"] = metadata
-    dump_yaml(dvcfile.path, data)
 
     dvcfile.dump(stage)
     assert dvcfile._load()[0] == data
@@ -349,9 +355,31 @@ def test_dvcfile_dump_preserves_comments(tmp_dir, dvc):
             - foo"""
     )
     tmp_dir.gen("dvc.yaml", text)
-    stage = dvc.get_stage(name="generate-foo")
+    stage = dvc.stage.load_one(name="generate-foo")
     stage.outs[0].use_cache = False
     dvcfile = stage.dvcfile
 
     dvcfile.dump(stage)
     assert dvcfile._load()[1] == (text + ":\n\tcache: false\n".expandtabs())
+
+
+@pytest.mark.parametrize(
+    "data, name",
+    [
+        ({"build-us": {"cmd": "echo ${foo}"}}, "build-us"),
+        (
+            {"build": {"foreach": ["us", "gb"], "do": {"cmd": "echo ${foo}"}}},
+            "build@us",
+        ),
+    ],
+)
+def test_dvcfile_try_dumping_parametrized_stage(tmp_dir, dvc, data, name):
+    dump_yaml("dvc.yaml", {"stages": data, "vars": [{"foo": "foobar"}]})
+
+    stage = dvc.stage.load_one(name=name)
+    dvcfile = stage.dvcfile
+
+    with pytest.raises(ParametrizedDumpError) as exc:
+        dvcfile.dump(stage)
+
+    assert str(exc.value) == f"cannot dump a parametrized stage: '{name}'"

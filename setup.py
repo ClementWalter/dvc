@@ -50,7 +50,7 @@ install_requires = [
     "colorama>=0.3.9",
     "configobj>=5.0.6",
     "gitpython>3",
-    "dulwich>=0.20.11",
+    "dulwich>=0.20.14",
     "setuptools>=34.0.0",
     "nanotime>=0.5.2",
     "pyasn1>=0.4.1",
@@ -84,6 +84,7 @@ install_requires = [
     "dictdiffer>=0.8.1",
     "python-benedict>=0.21.1",
     "pyparsing==2.4.7",
+    "typing_extensions>=3.7.4",
 ]
 
 
@@ -128,13 +129,11 @@ tests_requirements = [
     "google-compute-engine==2.8.13",
     "Pygments",  # required by collective.checkdocs,
     "collective.checkdocs",
-    "flake8==3.8.3",
     "psutil",
-    "flake8-docstrings",
     "pydocstyle<4.0",
     "jaraco.windows==3.9.2",
     "mock-ssh-server>=0.8.2",
-    "moto==1.3.16.dev110",
+    "moto==1.3.16.dev122",
     # moto's indirect dependency that is causing problems with flufl.lock's
     # dependency (atpublic). See https://github.com/iterative/dvc/pull/4853
     "aws-sam-translator<1.29.0",
@@ -143,15 +142,12 @@ tests_requirements = [
     "urllib3<1.26.0",
     "rangehttpserver==1.2.0",
     "beautifulsoup4==4.4.0",
-    "flake8-bugbear",
-    "flake8-comprehensions==3.3.0",
-    "flake8-string-format",
     "pylint==2.5.3",
     "pylint-pytest>=0.3.0",
     "pylint-plugin-utils",
     "wget",
     "filelock",
-    "black==19.10b0",
+    "mypy",
     "wsgidav",
 ]
 

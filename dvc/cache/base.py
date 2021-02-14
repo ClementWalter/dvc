@@ -3,6 +3,7 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
+from typing import Optional
 
 from funcy import decorator
 from shortuuid import uuid
@@ -16,7 +17,9 @@ from dvc.exceptions import (
     DvcException,
 )
 from dvc.progress import Tqdm
-from dvc.remote.slow_link_detection import slow_link_guard
+from dvc.remote.slow_link_detection import (  # type: ignore[attr-defined]
+    slow_link_guard,
+)
 
 from ..tree.base import RemoteActionNotImplemented
 
@@ -41,7 +44,7 @@ class CloudCache:
     """Cloud cache class."""
 
     DEFAULT_CACHE_TYPES = ["copy"]
-    CACHE_MODE = None
+    CACHE_MODE: Optional[int] = None
 
     def __init__(self, tree):
         self.tree = tree
@@ -103,7 +106,7 @@ class CloudCache:
             bool: True if data has changed, False otherwise.
         """
 
-        logger.debug(
+        logger.trace(
             "checking if '%s'('%s') has changed.", path_info, hash_info
         )
 
@@ -131,7 +134,7 @@ class CloudCache:
             )
             return True
 
-        logger.debug("'%s' hasn't changed.", path_info)
+        logger.trace("'%s' hasn't changed.", path_info)
         return False
 
     def link(self, from_info, to_info):
@@ -342,14 +345,14 @@ class CloudCache:
         # Prefer string path over PathInfo when possible due to performance
         cache_info = self.hash_to_path(hash_info.value)
         if self.tree.is_protected(cache_info):
-            logger.debug(
+            logger.trace(
                 "Assuming '%s' is unchanged since it is read-only", cache_info
             )
             return False
 
         actual = self.tree.get_hash(cache_info)
 
-        logger.debug(
+        logger.trace(
             "cache '%s' expected '%s' actual '%s'",
             cache_info,
             hash_info,
@@ -518,7 +521,7 @@ class CloudCache:
             failed = path_info
 
         elif not relink and not self.changed(path_info, hash_info):
-            logger.debug("Data '%s' didn't change.", path_info)
+            logger.trace("Data '%s' didn't change.", path_info)
             skip = True
 
         elif self.changed_cache(

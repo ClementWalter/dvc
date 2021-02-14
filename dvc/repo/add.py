@@ -154,7 +154,7 @@ def _create_stages(
 ):
     from glob import iglob
 
-    from dvc.stage import Stage, create_stage
+    from dvc.stage import Stage, create_stage, restore_meta
 
     if glob:
         expanded_targets = [
@@ -181,7 +181,10 @@ def _create_stages(
             outs=[out],
             external=external,
         )
-        if stage:
+        restore_meta(stage)
+        if stage.can_be_skipped:
+            stage = None
+        else:
             Dvcfile(repo, stage.path).remove()
             if desc:
                 stage.outs[0].desc = desc

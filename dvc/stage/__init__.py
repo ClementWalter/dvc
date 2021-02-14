@@ -2,6 +2,8 @@ import logging
 import os
 import string
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Optional
 
 from funcy import cached_property, project
 
@@ -53,11 +55,18 @@ def loads_from(cls, repo, path, wdir, data):
                 Stage.PARAM_ALWAYS_CHANGED,
                 Stage.PARAM_MD5,
                 Stage.PARAM_DESC,
+                Stage.PARAM_META,
                 "name",
             ],
         ),
     }
     return cls(**kw)
+
+
+@dataclass
+class RawData:
+    parametrized: bool = False
+    generated_from: Optional[str] = None
 
 
 def create_stage(cls, repo, path, external=False, **kwargs):
@@ -79,19 +88,31 @@ def create_stage(cls, repo, path, external=False, **kwargs):
     check_circular_dependency(stage)
     check_duplicated_arguments(stage)
 
-    if stage and stage.dvcfile.exists():
-        has_persist_outs = any(out.persist for out in stage.outs)
-        ignore_run_cache = (
-            not kwargs.get("run_cache", True) or has_persist_outs
-        )
-        if has_persist_outs:
-            logger.warning("Build cache is ignored when persisting outputs.")
-
-        if not ignore_run_cache and stage.can_be_skipped:
-            logger.info("Stage is cached, skipping")
-            return None
-
     return stage
+
+
+def restore_meta(stage):
+    from .exceptions import StageNotFound
+
+    if not stage.dvcfile.exists():
+        return
+
+    try:
+        old = stage.reload()
+    except StageNotFound:
+        return
+
+    # will be used to restore comments later
+    # noqa, pylint: disable=protected-access
+    stage._stage_text = old._stage_text
+
+    stage.meta = old.meta
+    stage.desc = old.desc
+
+    old_desc = {out.def_path: out.desc for out in old.outs}
+
+    for out in stage.outs:
+        out.desc = old_desc.get(out.def_path, None)
 
 
 class Stage(params.StageParams):
@@ -113,6 +134,7 @@ class Stage(params.StageParams):
         stage_text=None,
         dvcfile=None,
         desc=None,
+        meta=None,
     ):
         if deps is None:
             deps = []
@@ -131,13 +153,15 @@ class Stage(params.StageParams):
         self._stage_text = stage_text
         self._dvcfile = dvcfile
         self.desc = desc
+        self.meta = meta
+        self.raw_data = RawData()
 
     @property
-    def path(self):
+    def path(self) -> str:
         return self._path
 
     @path.setter
-    def path(self, path):
+    def path(self, path: str):
         self._path = path
         self.__dict__.pop("path_in_repo", None)
         self.__dict__.pop("relpath", None)
@@ -169,7 +193,7 @@ class Stage(params.StageParams):
         return f"stage: '{self.addressing}'"
 
     @property
-    def addressing(self):
+    def addressing(self) -> str:
         """
         Useful for alternative presentations where we don't need
         `Stage:` prefix.
@@ -352,9 +376,19 @@ class Stage(params.StageParams):
 
     @property
     def can_be_skipped(self):
-        return (
-            self.is_cached and not self.is_callback and not self.always_changed
-        )
+        if not self.dvcfile.exists():
+            return False
+
+        has_persist_outs = any(out.persist for out in self.outs)
+        if has_persist_outs:
+            logger.warning("Build cache is ignored when persisting outputs.")
+            return False
+
+        if self.is_cached and not self.is_callback and not self.always_changed:
+            logger.info("Stage is cached, skipping")
+            return True
+
+        return False
 
     def reload(self):
         return self.dvcfile.stage
@@ -475,6 +509,8 @@ class Stage(params.StageParams):
                 check_missing_outputs(self)
 
         if not dry:
+            if kwargs.get("checkpoint_func", None):
+                allow_missing = True
             self.save(allow_missing=allow_missing)
             if not no_commit:
                 self.commit(allow_missing=allow_missing)
@@ -621,6 +657,7 @@ class PipelineStage(Stage):
         super().__init__(*args, **kwargs)
         self.name = name
         self.cmd_changed = False
+        self.tracked_vars = {}
 
     def __eq__(self, other):
         return super().__eq__(other) and self.name == other.name

@@ -41,7 +41,7 @@ class Base:
         self._root_dir = os.path.realpath(root_dir)
 
     @property
-    def root_dir(self):
+    def root_dir(self) -> str:
         return self._root_dir
 
     def __repr__(self):
@@ -65,6 +65,10 @@ class Base:
         submodule.
         """
         return True
+
+    def is_ignored(self, path):  # pylint: disable=unused-argument
+        """Returns whether or not path is ignored by SCM."""
+        return False
 
     def ignore(self, path):  # pylint: disable=unused-argument
         """Makes SCM ignore a specified path."""
